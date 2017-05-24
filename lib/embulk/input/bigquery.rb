@@ -75,7 +75,7 @@ module Embulk
 					h
 				end
 
-      def keys_to_sym(hash)
+			def keys_to_sym(hash)
 				ret = {}
 				hash.each do |key, value|
 					ret[key.to_sym] = value
