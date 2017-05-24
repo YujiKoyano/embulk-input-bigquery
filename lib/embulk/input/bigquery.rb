@@ -50,6 +50,7 @@ module Embulk
 			def run
 				bq = Google::Cloud::Bigquery.new(project: @task[:project], keyfile: @task[:keyfile])
 				params = @task[:params]
+				@task[:columns] = values_to_sym(@task[:columns], 'name')
 				option = keys_to_sym(@task[:option])
 				rows = bq.query(@task[:sql], **option)
 				rows.each do |row|
@@ -68,7 +69,13 @@ module Embulk
 				return {}
 			end
 
-			def keys_to_sym(hash)
+			def values_to_sym(hashs, key)
+				hashs.map do |h|
+					h[key] = h[key].to_sym
+					h
+				end
+
+      def keys_to_sym(hash)
 				ret = {}
 				hash.each do |key, value|
 					ret[key.to_sym] = value
