@@ -74,6 +74,7 @@ module Embulk
 					h[key] = h[key].to_sym
 					h
 				end
+			end
 
 			def keys_to_sym(hash)
 				ret = {}
