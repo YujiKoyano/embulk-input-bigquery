@@ -26,7 +26,15 @@ module Embulk
 					keyfile: config[:keyfile],
 					sql: sql,
 					columns: config[:columns],
-					params: params
+					params: params,
+					option: {
+						max: config[:max],
+						cache: config[:cache],
+						timeout: config[:timeout],
+						dryrun:  config[:dryrun]
+						standard_sql: config[:standard_sql],
+						legacy_sql: config[:legacy_sql]
+					}
 				}
 
 				columns = []
@@ -42,10 +50,9 @@ module Embulk
 			def run
 				bq = Google::Cloud::Bigquery.new(project: @task[:project], keyfile: @task[:keyfile])
 				params = @task[:params]
-				rows = bq.query(@task[:sql])
-
 				@task[:columns] = values_to_sym(@task[:columns], 'name')
-
+				option = keys_to_sym(@task[:option])
+				rows = bq.query(@task[:sql], **option)
 				rows.each do |row|
 					columns = []
 					@task[:columns].each do |c|
@@ -67,6 +74,13 @@ module Embulk
 					h[key] = h[key].to_sym
 					h
 				end
+
+      def keys_to_sym(hash)
+				ret = {}
+				hash.each do |key, value|
+					ret[key.to_sym] = value
+				end
+				ret
 			end
     end
   end
