@@ -27,15 +27,33 @@ module Embulk
 					sql: sql,
 					columns: config[:columns],
 					params: params,
+					synchronous_method: config[:synchronous_method],
+					asynchronous_method: config[:asynchronous_method],
+					dataset: config[:dataset],
+					table: config[:table],
 					option: {
-						max: config[:max],
 						cache: config[:cache],
-						timeout: config[:timeout],
-						dryrun:  config[:dryrun],
 						standard_sql: config[:standard_sql],
-						legacy_sql: config[:legacy_sql]
+						legacy_sql: config[:legacy_sql],
 					}
 				}
+
+				if task[:synchronous_method] || !task[:asynchronous_method]
+					task[:option].merge!(
+						{
+							max: config[:max],
+							timeout: config[:timeout],
+							dryrun:  config[:dryrun],
+						}
+					)
+				else
+					task[:option].merge!(
+						{
+							large_results: config[:legacy_sql],
+							write: config[:write],
+						}
+					)
+				end
 
 				columns = []
 				config[:columns].each_with_index do |c, i|
@@ -52,21 +70,54 @@ module Embulk
 				params = @task[:params]
 				@task[:columns] = values_to_sym(@task[:columns], 'name')
 				option = keys_to_sym(@task[:option])
-				rows = bq.query(@task[:sql], **option)
-				rows.each do |row|
-					columns = []
-					@task[:columns].each do |c|
-						val = row[c['name']]
-						if c['eval']
-							val = eval(c['eval'], binding)
+				if @task[:synchronous_method] || @task[:asynchronous_method].nil?
+					run_synchronous_query(bq, option)
+				else
+					if @task[:dataset]
+						dataset = bq.dataset(@task[:dataset])
+						option[:table] = dataset.table(@task[:table])
+						if option[:table].nil?
+							option[:table] = dataset.create_table(@task[:table])
 						end
-						columns << val
 					end
-
-					@page_builder.add(columns)
+					run_asynchronous_query(bq, option)
 				end
 				@page_builder.finish
 				return {}
+			end
+
+			def run_synchronous_query(bq, option)
+				rows = bq.query(@task[:sql], **option)
+				rows.each do |row|
+					record = extract_record(row)
+					@page_builder.add(record)
+				end
+			end
+
+			def run_asynchronous_query(bq, option)
+				job = bq.query_job(@task[:sql], **option)
+				job.wait_until_done!
+				return {} if job.failed?
+				results = job.query_results
+				while results
+					results.each do |row|
+						record = extract_record(row)
+						@page_builder.add(record)
+					end
+					results = results.next
+				end
+			end
+
+			def extract_record(row)
+				columns = []
+				@task[:columns].each do |c|
+					val = row[c['name']]
+					if c['eval']
+						val = eval(c['eval'], binding)
+					end
+					columns << val
+				end
+				return columns
 			end
 
 			def values_to_sym(hashs, key)
