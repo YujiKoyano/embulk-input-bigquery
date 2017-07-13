@@ -135,7 +135,7 @@ module Embulk
 				ret
 			end
 
-      def values_to_sym(hashs, key)
+                        def values_to_sym(hashs, key)
 				hashs.map do |h|
 					h[key] = h[key].to_sym
 					h
